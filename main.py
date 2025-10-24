@@ -26,10 +26,40 @@ def process_image(img,face_detection):
     return img
 
 image_name = "Face_video.jpg"
-args = argparse.ArgumentParser()
-args.add_argument("--mode", default='webcamq')  # default to image since filePath is a JPG
-args.add_argument("--filePath", default=f"./Input/Face_video.mp4")
-args = args.parse_args()
+parser = argparse.ArgumentParser(description="Choose mode: image, video or webcam")
+parser.add_argument("--mode", choices=["image", "video", "webcam"], help="mode to run")
+parser.add_argument("--filePath", help="path to image or video file (required for image/video)")
+parsed = parser.parse_args()
+
+# If no mode provided on CLI, ask interactively
+if not parsed.mode:
+    print("Select mode:")
+    print("  1) image")
+    print("  2) video")
+    print("  3) webcam")
+    choice = input("Enter 1/2/3: ").strip()
+    mode_map = {"1": "image", "2": "video", "3": "webcam"}
+    mode = mode_map.get(choice)
+    if not mode:
+        print("Invalid choice, exiting.")
+        raise SystemExit(1)
+else:
+    mode = parsed.mode
+
+# For image/video ask for file path if not provided
+filePath = parsed.filePath
+if mode in ("image", "video"):
+    if not filePath:
+        filePath = input("Enter path to the file: ").strip()
+    # normalize relative to script directory
+    if not os.path.isabs(filePath):
+        filePath = os.path.join(os.path.dirname(__file__), filePath)
+    if not os.path.exists(filePath):
+        print(f"Error: file not found: {filePath}")
+        raise SystemExit(1)
+
+# attach back to args-like names used later
+args = argparse.Namespace(mode=mode, filePath=filePath)
 
 output_dir = "./output"
 if not os.path.exists(output_dir):
@@ -38,7 +68,7 @@ if not os.path.exists(output_dir):
 #Face detection
 mp_face_detection = mp.solutions.face_detection
 
-with mp_face_detection.FaceDetection(min_detection_confidence = 0.5,model_selection = 0) as face_detection:
+with mp_face_detection.FaceDetection(min_detection_confidence = 0.5,model_selection = 1) as face_detection:
     
     if args.mode in ["image"]:
         # read image
@@ -79,7 +109,6 @@ with mp_face_detection.FaceDetection(min_detection_confidence = 0.5,model_select
 
         cap.release()
         out.release()
-        cv2.destroyAllWindows()
     
     elif args.mode in ['webcam']:
         cap = cv2.VideoCapture(0)
@@ -97,3 +126,5 @@ with mp_face_detection.FaceDetection(min_detection_confidence = 0.5,model_select
                 break
 
             cap.release()
+
+cv2.destroyAllWindows()
