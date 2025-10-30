@@ -3,6 +3,7 @@ import cv2
 import threading
 import tempfile
 import time
+import logging
 from flask import Flask, render_template, Response, request, redirect, url_for, send_file, flash
 from werkzeug.utils import secure_filename
 import mediapipe as mp
@@ -127,19 +128,30 @@ def mjpeg_generator_processed(cam):
     try:
         with mp_face_detection.FaceDetection(min_detection_confidence=0.5, model_selection=1) as face_detection:
             while True:
+                # stop if camera flagged stopped or capture closed
                 if getattr(cam, "stopped", True):
+                    logging.info("Camera stopped, exiting processed generator")
                     break
-                frame = cam.get_frame()
-                if frame is None:
-                    time.sleep(0.01)
-                    continue
-                proc = process_image(frame.copy(), face_detection)
-                _, jpeg = cv2.imencode('.jpg', proc)
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+
+                try:
+                    frame = cam.get_frame()
+                    if frame is None:
+                        time.sleep(0.01)
+                        continue
+
+                    proc = process_image(frame.copy(), face_detection)
+                    _, jpeg = cv2.imencode('.jpg', proc)
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+                except Exception as e:
+                    logging.exception("Error in processed frame loop: %s", e)
+                    # break to let the client know the stream ended instead of silently hanging
+                    break
     except GeneratorExit:
+        logging.info("Processed generator closed by client")
         return
-    except Exception:
+    except Exception as e:
+        logging.exception("Unhandled exception in processed generator: %s", e)
         return
 
 @app.route('/video_feed_raw')
@@ -162,7 +174,8 @@ def video_feed_processed():
         except RuntimeError as e:
             return Response(f"Camera error: {e}", status=503, mimetype='text/plain')
     return Response(mjpeg_generator_processed(camera),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+                    mimetype='multipart/x-mixed-replace; boundary=frame',
+                    headers={'Cache-Control': 'no-cache'})
 
 @app.route('/photo')
 def photo_page():
@@ -285,10 +298,13 @@ def process_video():
 def shutdown_camera():
     global camera
     if camera is not None:
-        # release resources and allow generators to exit
-        camera.release()
+        try:
+            camera.release()
+        except Exception:
+            pass
         camera = None
-    return "camera stopped"
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # enable threaded so both raw and processed MJPEG streams can be served concurrently
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
