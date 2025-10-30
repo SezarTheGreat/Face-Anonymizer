@@ -4,7 +4,8 @@ import threading
 import tempfile
 import time
 import logging
-from flask import Flask, render_template, Response, request, redirect, url_for, send_file, flash
+from flask import Flask, render_template, Response, request, redirect, url_for, send_file, flash, make_response
+import io
 from werkzeug.utils import secure_filename
 import mediapipe as mp
 
@@ -105,23 +106,33 @@ def index():
 def camera_page():
     return render_template('camera.html')
 
+logging.basicConfig(level=logging.INFO)
+
 def mjpeg_generator_raw(cam):
+    """Yield MJPEG frames from camera without processing."""
     try:
         while True:
-            # stop if camera flagged stopped or capture closed
             if getattr(cam, "stopped", True):
+                logging.info("Camera stopped, exiting raw generator")
                 break
+
             frame = cam.get_frame()
             if frame is None:
-                # yield a tiny pause to avoid 100% CPU
                 time.sleep(0.01)
                 continue
-            _, jpeg = cv2.imencode('.jpg', frame)
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+
+            try:
+                _, jpeg = cv2.imencode('.jpg', frame)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+            except Exception as e:
+                logging.exception("Error encoding raw frame: %s", e)
+                break
     except GeneratorExit:
+        logging.info("Raw generator closed by client")
         return
-    except Exception:
+    except Exception as e:
+        logging.exception("Unhandled exception in raw generator: %s", e)
         return
 
 def mjpeg_generator_processed(cam):
@@ -163,7 +174,8 @@ def video_feed_raw():
         except RuntimeError as e:
             return Response(f"Camera error: {e}", status=503, mimetype='text/plain')
     return Response(mjpeg_generator_raw(camera),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+                    mimetype='multipart/x-mixed-replace; boundary=frame',
+                    headers={'Cache-Control': 'no-cache'})
 
 @app.route('/video_feed_processed')
 def video_feed_processed():
@@ -304,6 +316,39 @@ def shutdown_camera():
             pass
         camera = None
     return redirect(url_for('index'))
+
+@app.route('/save_snapshot')
+def save_snapshot():
+    """
+    Capture current camera frame, apply processing (face anonymization)
+    and return it as a downloadable JPEG attachment.
+    """
+    global camera
+    if camera is None:
+        try:
+            camera = VideoCamera(0)
+        except RuntimeError:
+            return "Camera not available", 503
+
+    frame = camera.get_frame()
+    if frame is None:
+        return "No frame available", 503
+
+    # process the frame with mediapipe
+    try:
+        with mp_face_detection.FaceDetection(min_detection_confidence=0.5, model_selection=1) as face_detection:
+            proc = process_image(frame.copy(), face_detection)
+    except Exception as e:
+        return f"Processing error: {e}", 500
+
+    ret, jpeg = cv2.imencode('.jpg', proc)
+    if not ret:
+        return "Failed to encode image", 500
+
+    resp = make_response(jpeg.tobytes())
+    resp.headers.set('Content-Type', 'image/jpeg')
+    resp.headers.set('Content-Disposition', 'attachment; filename="snapshot_anonymized.jpg"')
+    return resp
 
 if __name__ == '__main__':
     # enable threaded so both raw and processed MJPEG streams can be served concurrently

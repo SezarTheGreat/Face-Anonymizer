@@ -4,15 +4,42 @@
   <div class="video-row">
     <div class="video-col">
       <h3>Raw</h3>
+      <!-- raw feed -->
       <img id="raw" src="{{ url_for('video_feed_raw') }}" alt="raw feed">
     </div>
     <div class="video-col">
       <h3>Processed</h3>
+      <!-- processed feed -->
       <img id="processed" src="{{ url_for('video_feed_processed') }}" alt="processed feed">
+      <div style="margin-top:10px;">
+        <button id="saveSnapshot">Save Anonymized Snapshot</button>
+      </div>
     </div>
   </div>
-  <p>Press the Stop Camera button when finished.</p>
+  <!-- Stop camera button -> redirects home -->
   <form action="{{ url_for('shutdown_camera') }}" method="get">
     <button type="submit">Stop Camera</button>
   </form>
+
+  <script>
+  document.getElementById('saveSnapshot').addEventListener('click', function(){
+    fetch('{{ url_for("save_snapshot") }}')
+      .then(resp => {
+        if (!resp.ok) throw new Error(resp.statusText || resp.status);
+        return resp.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'snapshot_anonymized.jpg';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1000);
+      })
+      .catch(err => {
+        alert('Snapshot failed: ' + err);
+      });
+  });
+  </script>
 {% endblock %}
