@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Upload Video</h2>
+  <form id="videoForm" method="post" action="{{ url_for('process_video') }}" enctype="multipart/form-data">
+    <input type="file" name="video" accept="video/*" required>
+    <button type="submit">Upload & Process (may take a while)</button>
+  </form>
+{% endblock %}

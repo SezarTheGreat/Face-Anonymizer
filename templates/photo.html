@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Upload Photo</h2>
+  <form id="photoForm" method="post" action="{{ url_for('process_photo') }}" enctype="multipart/form-data" target="result_frame">
+    <input type="file" name="photo" accept="image/*" required>
+    <button type="submit">Upload & Process</button>
+  </form>
+
+  <h3>Result</h3>
+  <iframe name="result_frame" style="width:640px;height:480px;border:1px solid #ccc;"></iframe>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Face Anonymyzer</h1>
+  <p>Choose a mode: Camera (live), Photo (upload) or Video (upload).</p>
+  <div class="links">
+    <a class="card" href="{{ url_for('camera_page') }}">Live Camera</a>
+    <a class="card" href="{{ url_for('photo_page') }}">Anonymize Photo</a>
+    <a class="card" href="{{ url_for('video_page') }}">Anonymize Video</a>
+  </div>
+{% endblock %}

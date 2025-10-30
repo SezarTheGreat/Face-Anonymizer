@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Live Camera (raw & processed)</h2>
+  <div class="video-row">
+    <div class="video-col">
+      <h3>Raw</h3>
+      <img id="raw" src="{{ url_for('video_feed_raw') }}" alt="raw feed">
+    </div>
+    <div class="video-col">
+      <h3>Processed</h3>
+      <img id="processed" src="{{ url_for('video_feed_processed') }}" alt="processed feed">
+    </div>
+  </div>
+  <p>Press the Stop Camera button when finished.</p>
+  <form action="{{ url_for('shutdown_camera') }}" method="get">
+    <button type="submit">Stop Camera</button>
+  </form>
+{% endblock %}
