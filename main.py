@@ -112,19 +112,23 @@ with mp_face_detection.FaceDetection(min_detection_confidence = 0.5,model_select
     
     elif args.mode in ['webcam']:
         cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print("Error: cannot open webcam (device 0)")
+            raise SystemExit(1)
 
-        ret, frame = cap.read()
-
-        while ret:
-            frame = process_image(frame,face_detection)
-
-            cv2.imshow('frame',frame)
-            cv2.waitKey(25)
-
-            ret,frame = cap.read()
-            if cv2.waitKey(40) & 0xFF == ord('q'):
+        while True:
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                print("Warning: failed to read frame from webcam")
                 break
 
-            cap.release()
+            proc = process_image(frame, face_detection)
+            cv2.imshow('frame', proc)
+
+            # single waitKey used to allow quitting with 'q'
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        cap.release()
 
 cv2.destroyAllWindows()
